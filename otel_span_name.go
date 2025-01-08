@@ -2,12 +2,14 @@ package otelSpanName
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -57,7 +59,17 @@ func (usn *UpdateSpanName) ServeHTTP(w http.ResponseWriter, r *http.Request, nex
 		usn.logger.Debug("Setting span name to " + name)
 
 		if name != "" {
-			trace.SpanFromContext(r.Context()).SetName(name)
+			span := trace.SpanFromContext(r.Context())
+			span.SetName(name)
+
+			cacheStatus := w.Header().Get("Cache-Status")
+
+			if cacheStatus != "" {
+				regexp, _ := regexp.Compile("^Souin; hit;(.*)")
+				cacheHit := regexp.Match([]byte(cacheStatus))
+				span.SetAttributes(attribute.KeyValue{Key: "cache.hit", Value: attribute.BoolValue(cacheHit) })
+			}
+
 		}
 	} else {
 		usn.logger.Debug("Span context invalid")
